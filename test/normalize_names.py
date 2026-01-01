@@ -43,6 +43,20 @@ def is_likely_bio_or_description(text):
         return True
     return False
 
+def normalize_for_comparison(text):
+    """
+    Normalize text for comparison (used for names).
+    - Convert to lowercase
+    - Remove extra whitespace
+    """
+    if not text:
+        return ""
+    
+    normalized = str(text).strip().lower()
+    # Remove extra whitespace
+    normalized = re.sub(r'\s+', ' ', normalized)
+    return normalized
+
 def normalize_english_name(name):
     """
     Normalize an English name:
@@ -211,18 +225,31 @@ for record in records:
     
     # Check if English name is in Chinese column
     if chinese_name_orig and is_likely_english_name(chinese_name_orig) and not has_chinese_characters(chinese_name_orig):
-        # Move to English column
+        # Normalize the English name
+        normalized_english_in_chinese = normalize_english_name(chinese_name_orig)
+        
         if not english_name_orig:
-            english_name_fixed = normalize_english_name(chinese_name_orig)
-            chinese_name_fixed = ''
+            # English column is empty - keep the name in both columns
+            english_name_fixed = normalized_english_in_chinese
+            chinese_name_fixed = normalized_english_in_chinese
             needs_update = True
-            update_reason.append(f"Moved English name from Chinese column: '{chinese_name_orig}'")
+            update_reason.append(f"Normalized English name and kept in both columns: '{normalized_english_in_chinese}'")
         else:
-            # Both filled - keep English in English column, clear Chinese
-            english_name_fixed = normalize_english_name(chinese_name_orig) if not english_name_fixed else normalize_english_name(english_name_fixed)
-            chinese_name_fixed = ''
-            needs_update = True
-            update_reason.append(f"Moved English name from Chinese column (English already existed)")
+            # Both filled with same/similar English name - normalize and keep in both columns
+            normalized_english = normalize_english_name(english_name_orig)
+            normalized_chinese = normalize_english_name(chinese_name_orig)
+            # If they're essentially the same, keep the normalized version in both
+            if normalize_for_comparison(normalized_english) == normalize_for_comparison(normalized_chinese):
+                english_name_fixed = normalized_english
+                chinese_name_fixed = normalized_english  # Keep in both columns
+                needs_update = True
+                update_reason.append(f"Normalized English name in both columns: '{normalized_english}'")
+            else:
+                # Different names - keep English in English column, clear Chinese
+                english_name_fixed = normalized_english
+                chinese_name_fixed = ''
+                needs_update = True
+                update_reason.append(f"Moved English name from Chinese column (different English name existed)")
     
     # Check if Chinese name is in English column
     if english_name_orig and has_chinese_characters(english_name_orig):
@@ -275,12 +302,18 @@ for record in records:
             else:
                 update_reason.append(f"Fixed whitespace in Chinese name")
     
-    # Check for duplicate (same name in both columns)
-    if chinese_name_fixed and english_name_fixed and chinese_name_fixed == english_name_fixed:
-        # If they're the same, keep in Chinese column, clear English
-        english_name_fixed = ''
+    # If only English name is filled, copy it to Chinese name column
+    if not chinese_name_fixed and english_name_fixed:
+        chinese_name_fixed = english_name_fixed
         needs_update = True
-        update_reason.append(f"Removed duplicate name from English column")
+        update_reason.append(f"Copied English name to Chinese name column: '{english_name_fixed}'")
+    
+    # Check for duplicate (same name in both columns) - but only if we didn't just copy it
+    # If they're the same and both are English names, keep both (don't clear English)
+    if chinese_name_fixed and english_name_fixed and chinese_name_fixed == english_name_fixed:
+        # Both are the same - this is fine, keep both filled
+        # No update needed unless there was another reason
+        pass
     
     if needs_update:
         updates_needed.append({
@@ -346,11 +379,17 @@ for update in updates_needed:
         update_fields = {}
         
         # Only update fields that changed
-        if update['chinese_name'] != update['original_chinese']:
-            update_fields['您的姓名'] = update['chinese_name'] if update['chinese_name'] else ''
+        # Normalize empty strings for comparison
+        orig_chinese = update['original_chinese'] if update['original_chinese'] else ''
+        orig_english = update['original_english'] if update['original_english'] else ''
+        new_chinese = update['chinese_name'] if update['chinese_name'] else ''
+        new_english = update['english_name'] if update['english_name'] else ''
         
-        if update['english_name'] != update['original_english']:
-            update_fields['别名/英文名'] = update['english_name'] if update['english_name'] else ''
+        if new_chinese != orig_chinese:
+            update_fields['您的姓名'] = new_chinese
+        
+        if new_english != orig_english:
+            update_fields['别名/英文名'] = new_english
         
         if update_fields:
             table.update(update['record_id'], update_fields)
