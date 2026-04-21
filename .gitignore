@@ -25,3 +25,5 @@ ENV/
 .DS_Store
 Thumbs.db
 
+.claude/worktrees/compassionate-nightingale-a5b601/
+/.claude/worktrees
