@@ -135,7 +135,92 @@ table.update(record_id, {"Bio": msg.content[0].text})
 
 ---
 
-## 4. Conventions
+## 4. Scraping LinkedIn profiles
+
+The `Scraped Information` column is populated by the apify actor [`dev_fusion/Linkedin-Profile-Scraper`](https://console.apify.com/actors/2SyF0bVxmgGr8IVCZ) — **$10 per 1,000 results** (~$0.01 per profile). Full per-profile JSON is saved in the column and mirrored under `scraped information/<record_id>.json` locally (gitignored).
+
+### Prerequisites
+
+```bash
+brew install apify-cli           # macOS
+apify login                      # paying account required for API/CLI runs; free tier is UI-only
+```
+
+### Input format
+
+The actor takes a JSON array of LinkedIn profile URLs:
+
+```json
+{ "profileUrls": ["https://www.linkedin.com/in/williamhgates", "..."] }
+```
+
+### URL normalization — **critical**
+
+Raw LinkedIn URLs from the table break the actor in predictable ways. Normalize before sending:
+
+- **Strip query strings.** `?originalSubdomain=cn|hk|sg|uk|...` and `?locale=zh_CN` trigger `"No person found"` even when the profile exists.
+- **Strip trailing subpaths.** `/overlay/photo/`, `/overlay/about-this-profile/` — keep only `/in/<handle>/`.
+- **Skip non-person URLs.** `/company/*`, `/pub/*` (legacy), `/posts/*` will fail.
+- **Keep regional subdomains as-is** (`cn.linkedin.com`, `hk.linkedin.com`, `uk.linkedin.com` all work).
+
+Python helper:
+
+```python
+import re
+from urllib.parse import urlsplit, urlunsplit
+
+def normalize_linkedin(u: str) -> str:
+    parts = urlsplit(u.strip())
+    path = re.sub(r"/overlay/[^/]*/?$", "", parts.path)
+    m = re.match(r"^(/in/[^/]+)(/.*)?$", path)
+    if m:
+        path = m.group(1) + "/"
+    return urlunsplit((parts.scheme, parts.netloc, path, "", ""))
+```
+
+### Running the actor
+
+Small batch (CLI, piped stdin):
+
+```bash
+echo '{"profileUrls":["https://www.linkedin.com/in/williamhgates"]}' \
+  | apify call dev_fusion/Linkedin-Profile-Scraper --silent --output-dataset \
+  > output.json
+```
+
+For >150 profiles, chunk the input. Typical throughput on this actor: ~1 profile/sec per chunk with internal parallelism.
+
+### Output shape
+
+Each item in the returned array has:
+
+- **Core**: `linkedinUrl`, `fullName`, `firstName`, `lastName`, `headline`, `email`, `mobileNumber`, `connections`, `followers`, `publicIdentifier`, `urn`, `addressWithCountry`.
+- **Current role**: `jobTitle`, `companyName`, `companyIndustry`, `companyWebsite`, `companyLinkedin`, `companySize`, `jobStartedOn`, `currentJobDuration`.
+- **Arrays**: `experiences[]`, `educations[]`, `skills[]`, `languages[]`, `publications[]`, `patents[]`, `recommendations[]`, `updates[]` (posts), `peopleAlsoViewed[]`.
+- **Failures**: `{"linkedinUrl": "...", "succeeded": false, "error": "..."}` — match by `linkedinUrl` to identify.
+
+Match scraped results back to Airtable records by normalized `linkedinUrl` — the actor echoes the input URL, so indexing by both raw and normalized forms covers subdomain variants.
+
+### Writing to Airtable — watch the 100K long-text cap
+
+The `Scraped Information` field is `multilineText` with a **100,000-character cap**. Pretty-printed JSON (`indent=2`) fits for almost all profiles, but very large records (lots of `peopleAlsoViewed` and `updates`) overflow. Fall back to minified JSON (no indentation) for those — all data preserved, just no whitespace:
+
+```python
+pretty = json.dumps(profile, indent=2, ensure_ascii=False)
+body = pretty if len(pretty) <= 100_000 else json.dumps(profile, ensure_ascii=False, separators=(",", ":"))
+```
+
+### Observed success rate
+
+On the 504 existing Profiles URLs:
+
+- 350 were LinkedIn URLs; **338 scraped successfully** (96.6%) after URL normalization.
+- 12 LinkedIn failures: deleted/private profiles, malformed URLs (emoji, encoded Chinese commas), `/company/` or `/posts/` URLs, and legacy `/pub/` paths.
+- 154 non-LinkedIn URLs skipped (94 Baidu Baike, 8 Google Scholar, plus ~40 other domains) — this actor only handles LinkedIn.
+
+---
+
+## 5. Conventions
 
 - **Primary key is `您的姓名`.** Watch for duplicates when adding rows.
 - **Tags are multi-select** — pass a list (`["Founder", "Investor"]`), not a comma-separated string.
