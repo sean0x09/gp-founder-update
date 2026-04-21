@@ -27,3 +27,6 @@ Thumbs.db
 
 .claude/worktrees/compassionate-nightingale-a5b601/
 /.claude/worktrees
+
+# Scraped LinkedIn profile JSONs — contain PII (emails, phones). Do not commit.
+scraped information/
