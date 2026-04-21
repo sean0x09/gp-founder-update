@@ -24,32 +24,44 @@ If you need to rotate any of these:
 
 ## 2. What's in the table
 
-Directory of ~737 GP community members. Fields:
+Directory of **770 GP community members** (table ID `tbluZvRKR9uatnlMU`, "GRC Database"). The table is a CRM-style roster tracking who's in the community, how the GP team knows them, and what their membership / BD status is. Most rows are founders and frontier AI operators split roughly evenly between China and the US.
 
-| Field (Airtable) | Meaning | Type |
-|---|---|---|
-| `您的姓名` | Full name (primary identifier) | text |
-| `别名/英文名` | English name / alias | text |
-| `Title` | Job title | text |
-| `目前就职` | Current company | text |
-| `毕业院校` | Alma mater | text |
-| `最高学历` | Highest education | text |
-| `性别` | Gender | text |
-| `会员状态` | Membership status | single-select |
-| `建联状态` | Connection status | single-select |
-| `熟悉程度` | Familiarity level | single-select |
-| `参与活动次数` | # events attended | number |
-| `标签` | Role tags (see below) | multi-select |
-| `Base` | Location (e.g. `['Bay Area', 'US']`) | multi-select |
-| `Profiles` | LinkedIn / social URL | URL text |
-| `Profile Picture` | Headshot | attachment |
-| `Bio` | 2-sentence professional bio | long text |
+### Fields
 
-### Canonical tag values for `标签`
+| Field (Airtable) | Meaning | Type | Populated |
+|---|---|---|---|
+| `您的姓名` | Full name (primary identifier) | long text | 769/770 |
+| `别名/英文名` | English name / alias | long text | 425/770 |
+| `Title` | Job title | long text | 739/770 |
+| `目前就职` | Current company | long text | 747/770 |
+| `毕业院校` | Alma mater | long text | 649/770 |
+| `最高学历` | Highest education | single-select | 529/770 |
+| `性别` | Gender | single-select | 620/770 |
+| `会员状态` | Membership status | single-select | 700/770 |
+| `建联状态` | BD / outreach status | single-select | 691/770 |
+| `熟悉程度` | Familiarity level | single-select | 623/770 |
+| `参与活动次数` | # events attended | number | 402/770 |
+| `标签` | Role tag (**single-select**, not multi) | single-select | 651/770 |
+| `Base` | Location (multi, e.g. `["Bay Area", "US"]`) | multi-select | 764/770 |
+| `Profiles` | LinkedIn / social URL | URL | 504/770 |
+| `Profile Picture` | Headshot | attachment | 446/770 |
+| `Bio` | LLM-generated professional bio (often multi-paragraph) | long text | 750/770 |
+| `Last Updated` | Row update timestamp | datetime | 0/770 |
 
-`Founder` · `Frontier` · `Researcher` · `Engineer` · `Investor` · `Academic` · `Student` · `Executive` · `Professional`
+### Canonical option values
 
-Older values (`Doer`, `Engineer / Lead`, `Professor`, `VP`, `lawyer`, `非会员`, `House Owner`) have been migrated out — don't reintroduce them.
+Pass these strings exactly (or send `typecast: true` to auto-create new options). The Airtable schema also allows `""` as a valid "blank" choice for every single-select below — we treat it as unset.
+
+- **`标签`** (one of): `Founder` · `Frontier` · `Engineer` · `Investor` · `Student` · `Executive` · `Academic` · `Professional`
+  - Current distribution: Founder 276 · Frontier 121 · Engineer 120 · Investor 62 · Student 32 · Executive 20 · Academic 16 · Professional 4.
+  - **`Researcher` is not a valid option** — it was removed from the schema. Map former researcher rows to `Academic` or `Frontier`.
+  - Other migrated-out values (don't reintroduce): `Doer`, `Engineer / Lead`, `Professor`, `VP`, `lawyer`, `非会员`, `House Owner`.
+- **`Base`** (one or more): `Bay Area` · `US` · `China` · `Undisclosed` · `UK` · `Singapore` · `Japan` · `Korea` · `Australia` · `New York` · `United States`. US-based rows usually carry both `["Bay Area", "US"]`; `United States` is a legacy variant of `US` — prefer `US`.
+- **`最高学历`**: `Bachelor` · `Master` · `PhD` · `Post-Doc` · `Below Bachelor` · `Unkown` (sic — existing typo in schema).
+- **`会员状态`**: `非会员` · `非付费会员` · `正在转化` · `付费会员`.
+- **`熟悉程度`**: `陌生人` · `线上网友` · `线下见过`.
+- **`建联状态`**: `待 BD` · `已建联`.
+- **`性别`**: `男` · `女`.
 
 ---
 
